@@ -1,0 +1,4 @@
+# Java projects created under this workspace are their own git repos —
+# only the rule set itself is tracked here.
+/*/
+!/rules/
