@@ -49,7 +49,7 @@ Give every clone of the project identical rules, either by:
 - **Submodule** (stays in sync):
 
   ```bash
-  git submodule add <this-repo-url> .agent-rules
+  git submodule add https://github.com/BroShow/java-dev.git .agent-rules
   echo "@.agent-rules/CLAUDE.md" >> CLAUDE.md
   ```
 
