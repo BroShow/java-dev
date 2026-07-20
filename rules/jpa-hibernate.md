@@ -28,6 +28,7 @@ List<OrderSummary> findSummaries(@Param("status") OrderStatus status);
 
   Entities are for write flows, where dirty checking earns its cost. DTOs fetch fewer columns, skip the persistence context, and can't throw `LazyInitializationException`.
 - **Always paginate.** Fetching more rows than the UI can display is pure waste. Any query that can return many rows takes a `Pageable`.
+- **Use keyset (seek) pagination for deep paging and infinite scroll.** OFFSET scans and discards every skipped row — page 1,000 is dramatically slower than page 1, and rows shift between requests as data changes. For "next page" navigation over large or live datasets, seek on the last-seen key via Spring Data's `WindowIterator`/`ScrollPosition.keyset()`. Plain offset `Pageable` is fine for small, admin-style result sets with numbered pages.
 
 ## Identifiers
 
@@ -43,6 +44,8 @@ private Long id;
 - `allocationSize = 50` (the pooled optimizer) cuts sequence round-trips 50×.
 - On PostgreSQL (our default database), never map columns as `SERIAL`/`BIGSERIAL` — they tie you to `IDENTITY` semantics. Flyway migrations declare `BIGINT` + an explicit sequence that matches the `@SequenceGenerator`.
 - Only if a project is forced onto MySQL (no sequences) is `IDENTITY` the pragmatic fallback — accept the lost insert batching.
+- **Never use random UUIDv4 as a primary key.** Random bytes destroy B+Tree index locality: every insert lands on a random page, bloating the index and evicting hot pages from the buffer pool.
+- **When globally unique or externally exposed IDs come up, consider TSID** (not mandatory — evaluate per project). Mihalcea's recommendation is a 64-bit time-sorted identifier stored as `bigint`: half the size of a UUID, monotonically increasing, so it behaves like a sequence in the index. His [hypersistence-tsid](https://github.com/vladmihalcea/hypersistence-tsid) library implements it. If the ID must be a real UUID (external contract), use time-ordered UUIDv7, never v4. If neither constraint exists, plain `SEQUENCE` remains the default.
 
 ## equals / hashCode
 
@@ -78,8 +81,37 @@ public void addItem(OrderItem item) {
 - **Never use a unidirectional `@OneToMany`** — it produces a join table or extra UPDATE statements.
 - `@ManyToMany`: use `Set`, not `List` (with `List`, removing one element deletes all join rows and re-inserts the rest). Cascade only `PERSIST` and `MERGE` — never `REMOVE`/`ALL`.
 - `cascade = CascadeType.ALL` + `orphanRemoval = true` belongs only on parent → child compositions the parent fully owns (Order → OrderItem).
-- Add `@Version` for optimistic locking on every entity that can be concurrently updated.
+- **`@OneToOne`: map the child side with `@MapsId`** so the child shares the parent's primary key:
+
+```java
+@Entity
+public class OrderDetails {
+    @Id
+    private Long id;
+
+    @OneToOne(fetch = FetchType.LAZY)
+    @MapsId
+    @JoinColumn(name = "order_id")
+    private Order order;
+}
+```
+
+  No separate FK column or index, and the parent can load the child by its own ID. Avoid the parent-side `@OneToOne(mappedBy = ...)` unless truly needed — the parent side cannot be lazy without bytecode enhancement, so it triggers an extra SELECT per parent.
 - Use `@DynamicUpdate` only for entities with many columns or heavy/LOB columns; the default full UPDATE caches better as a prepared statement.
+
+## Enum mapping
+
+Pick the mapping deliberately — never leave `@Enumerated` unspecified (the default is ORDINAL, silently):
+
+- Default choice: `@Enumerated(EnumType.STRING)` — self-documenting in queries and safe to reorder enum constants. Pair with a `CHECK` constraint (or PostgreSQL enum type) in the Flyway migration so the database rejects invalid values.
+- `EnumType.ORDINAL` (with a `smallint` column) only for high-volume tables where the storage difference is measurable — and then constants may **never** be reordered or removed, only appended. Document this on the enum itself.
+
+## Concurrency & locking
+
+- **Every entity that users can concurrently edit gets a `@Version` field.** Without it, the last write silently wins and the first user's update is lost — optimistic locking is a correctness requirement, not an optimization. This matters even more with read replicas and long user think-time between read and save.
+- Handle `OptimisticLockException` deliberately at the service boundary: retry idempotent system operations; surface a conflict (HTTP 409) for user edits so the user re-reads before overwriting.
+- Detached DTO → update flows must carry the version through the round-trip (include it in the form/DTO) or optimistic locking silently checks the wrong version.
+- Reach for pessimistic locks (`PESSIMISTIC_WRITE`, PostgreSQL `SELECT ... FOR UPDATE`) only when contention is proven and retries are unacceptable; for cross-instance coordination use advisory locks (see `postgresql-aws.md`).
 
 ## Batching & Hibernate settings
 
@@ -121,3 +153,6 @@ spring:
 - The Open Session In View anti-pattern: https://vladmihalcea.com/the-open-session-in-view-anti-pattern/
 - Spring Data JPA DTO projections: https://vladmihalcea.com/spring-jpa-dto-projection/
 - equals/hashCode for entities: https://vladmihalcea.com/the-best-way-to-implement-equals-hashcode-and-tostring-with-jpa-and-hibernate/
+- The best UUID type for a primary key (TSID): https://vladmihalcea.com/uuid-database-primary-key/
+- Keyset pagination: https://vladmihalcea.com/keyset-pagination-jpa-hibernate/ and https://vladmihalcea.com/spring-data-windowiterator/
+- The best way to map a @OneToOne: https://vladmihalcea.com/best-way-onetoone-optional/
