@@ -2,13 +2,15 @@
 
 These rules apply to ALL Java coding tasks in this workspace. Every Java project here uses **Java 21+, Spring Boot 3.x, and Lombok**, with **PostgreSQL on AWS RDS** as the default database. The persistence rules follow Vlad Mihalcea's High-Performance Java Persistence guidance — simple by default, efficient by design.
 
-Read and follow all five rule files before writing Java code:
+Read and follow all seven rule files before writing Java code:
 
 @rules/java-core.md
 @rules/spring-boot.md
 @rules/lombok.md
 @rules/jpa-hibernate.md
 @rules/postgresql-aws.md
+@rules/flyway.md
+@rules/observability.md
 
 ## Non-negotiables (quick reference)
 
@@ -22,3 +24,5 @@ Read and follow all five rule files before writing Java code:
 8. Schema changes go through Flyway migrations — never `ddl-auto=update`.
 9. PostgreSQL is the default database: JDBC URL carries `reWriteBatchedInserts=true` and `sslmode=require`; integration tests use Testcontainers with the production PostgreSQL major version, never H2.
 10. Database credentials come from AWS Secrets Manager or IAM auth — never committed configuration.
+11. Every service ships Actuator + Prometheus metrics from the first commit; actuator endpoints are never internet-facing.
+12. Configuration is YAML (`application.yml` + minimal profile overrides); no secrets in any YAML file.

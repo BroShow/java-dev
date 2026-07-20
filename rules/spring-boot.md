@@ -6,8 +6,10 @@
 - Standard layering: `controller` → `service` → `repository`. Package by feature (`com.acme.order`, `com.acme.customer`), not by layer.
 - Every new project sets, from day one:
 
-```properties
-spring.jpa.open-in-view=false
+```yaml
+spring:
+  jpa:
+    open-in-view: false
 ```
 
   Open Session in View is an anti-pattern (Vlad Mihalcea): it holds a database connection through view rendering and hides lazy-loading problems until production. Fix fetching in the service layer instead.
@@ -39,11 +41,29 @@ public class OrderService {
 - Use `@Transactional(readOnly = true)` for all read paths: it lets Hibernate skip dirty checking and snapshot allocation, and lets the pool route to replicas.
 - Keep transactions short. Never perform HTTP calls, messaging, or file I/O inside a transaction.
 
-## Configuration
+## Configuration & application.yml
 
-- Type-safe configuration via `@ConfigurationProperties` records — no scattered `@Value("${...}")`.
-- Secrets come from the environment, never from committed files.
-- Profiles for environment differences (`application-prod.yml`), not `if` statements.
+- **YAML, not `.properties`** — every project uses `application.yml`.
+- Layout: one `application.yml` with sane local-friendly defaults, plus `application-<profile>.yml` per environment (`prod`, `staging`) containing **only the values that differ**. Never duplicate common settings across profile files.
+- Profiles for environment differences, not `if` statements in code. Activate via `SPRING_PROFILES_ACTIVE`, never hardcoded.
+- **No secrets in any YAML file, ever** — not even "temporarily". Secrets arrive via environment variables or `spring.config.import` from AWS Secrets Manager/Parameter Store (`spring-cloud-aws`). Placeholders reference them: `password: ${DB_PASSWORD}`.
+- Type-safe configuration via `@ConfigurationProperties` records with `@Validated` — no scattered `@Value("${...}")`. Fail at startup on bad config, not at first use.
+- Keep keys the framework defines in their canonical kebab-case form; group custom properties under a single app prefix (`acme.orders.*`).
+- The baseline every new service starts from (merge with the persistence settings in `jpa-hibernate.md` and management settings in `observability.md`):
+
+```yaml
+spring:
+  application:
+    name: <service-name>       # required — feeds metric tags and logs
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+server:
+  shutdown: graceful
+```
 
 ## Testing
 
