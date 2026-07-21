@@ -1,16 +1,18 @@
 # Java Development Rules
 
-These rules apply to ALL Java coding tasks in this workspace. Every Java project here uses **Java 21+, Spring Boot 3.x, and Lombok**, with **PostgreSQL on AWS RDS** as the default database. The persistence rules follow Vlad Mihalcea's High-Performance Java Persistence guidance — simple by default, efficient by design.
+These rules apply to ALL Java coding tasks in this workspace. Every Java project here uses **Java 21+, Spring Boot 3.x, and Lombok**, with **PostgreSQL on AWS RDS** as the default database. The persistence rules follow Vlad Mihalcea's High-Performance Java Persistence guidance, the core Java rules follow Joshua Bloch's Effective Java, and the architecture rules follow Oliver Drotbohm's modular-monolith approach (Spring Modulith) — simple by default, efficient by design.
 
-Read and follow all seven rule files before writing Java code:
+Read and follow all nine rule files before writing Java code:
 
 @rules/java-core.md
 @rules/spring-boot.md
+@rules/architecture.md
 @rules/lombok.md
 @rules/jpa-hibernate.md
 @rules/postgresql-aws.md
 @rules/flyway.md
 @rules/observability.md
+@rules/static-analysis.md
 
 ## Non-negotiables (quick reference)
 
@@ -26,3 +28,5 @@ Read and follow all seven rule files before writing Java code:
 10. Database credentials come from AWS Secrets Manager or IAM auth — never committed configuration.
 11. Every service ships Actuator + Prometheus metrics from the first commit; actuator endpoints are never internet-facing.
 12. Configuration is YAML (`application.yml` + minimal profile overrides); no secrets in any YAML file.
+13. Cross-module access goes through a module's public API — never another module's repository, entities, or `internal` package; cross-module references are by ID, and boundaries are verified by a Spring Modulith/ArchUnit test.
+14. Formatting is Palantir Java Format via Spotless (`spotless:check` in the build); the Sonar way quality gate blocks on new-code bugs, vulnerabilities, and coverage — code smells stay advisory.

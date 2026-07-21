@@ -1,18 +1,20 @@
 # Java Development Rules for AI Agents
 
-A shared rule set that Claude Code (and other CLAUDE.md-aware agents) load automatically when working on our Java projects. It encodes our standard stack — **Java 21, Spring Boot 3.x, Lombok, PostgreSQL on AWS RDS** — and the persistence guidance of [Vlad Mihalcea's High-Performance Java Persistence](https://vladmihalcea.com/books/high-performance-java-persistence/): simple by default, efficient by design.
+A shared rule set that Claude Code (and other CLAUDE.md-aware agents) load automatically when working on our Java projects. It encodes our standard stack — **Java 21, Spring Boot 3.x, Lombok, PostgreSQL on AWS RDS** — and guidance from three trusted sources: [Vlad Mihalcea's High-Performance Java Persistence](https://vladmihalcea.com/books/high-performance-java-persistence/) for the persistence layer, Joshua Bloch's *Effective Java* for core Java, and Oliver Drotbohm's modular-monolith approach ([Spring Modulith](https://spring.io/projects/spring-modulith)) for architecture: simple by default, efficient by design.
 
 The entry point is [`CLAUDE.md`](CLAUDE.md), which lists the non-negotiables and imports the detailed rules:
 
 | File | Covers |
 |---|---|
-| [`rules/java-core.md`](rules/java-core.md) | Java 21 features, records, immutability, time/money types, error handling |
+| [`rules/java-core.md`](rules/java-core.md) | Java 21 features, records, immutability, time/money types, error handling, Effective Java (object contracts, API design, generics, lambdas/streams) |
 | [`rules/spring-boot.md`](rules/spring-boot.md) | Layering, constructor injection, web/service layer rules, application.yml conventions, testing |
+| [`rules/architecture.md`](rules/architecture.md) | Module boundaries (Spring Modulith), modulith-first stance, aggregate design |
 | [`rules/lombok.md`](rules/lombok.md) | Allowed annotations, the entity bans (`@Data` etc.), lombok.config |
 | [`rules/jpa-hibernate.md`](rules/jpa-hibernate.md) | Fetching, DTO projections, identifiers, equals/hashCode, associations, batching, locking (the Mihalcea core) |
 | [`rules/postgresql-aws.md`](rules/postgresql-aws.md) | PostgreSQL usage, HikariCP sizing, RDS/Aurora, local Docker setup |
 | [`rules/flyway.md`](rules/flyway.md) | Migration naming, immutability, zero-downtime schema changes |
 | [`rules/observability.md`](rules/observability.md) | Actuator, Micrometer/Prometheus, Grafana dashboards, logging |
+| [`rules/static-analysis.md`](rules/static-analysis.md) | Palantir Java Format via Spotless, SonarQube posture (Sonar way, blocking core), JaCoCo coverage |
 
 ## Using the rules
 
