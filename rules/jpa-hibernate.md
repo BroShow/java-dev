@@ -113,6 +113,51 @@ Pick the mapping deliberately — never leave `@Enumerated` unspecified (the def
 - Detached DTO → update flows must carry the version through the round-trip (include it in the form/DTO) or optimistic locking silently checks the wrong version.
 - Reach for pessimistic locks (`PESSIMISTIC_WRITE`, PostgreSQL `SELECT ... FOR UPDATE`) only when contention is proven and retries are unacceptable; for cross-instance coordination use advisory locks (see `postgresql-aws.md`).
 
+## Audit timestamps
+
+- When an entity needs `created_at`/`updated_at`, prefer **composition over inheritance** (Mihalcea): a reusable `@Embeddable` audit block + JPA listener, not a `@MappedSuperclass` base entity.
+- Why Mihalcea prefers this over the alternatives:
+  - **Over a `@MappedSuperclass` base entity**: Java has single inheritance, so a base entity spends the one superclass slot on plumbing and forces every entity into the same hierarchy. An `@Embeddable` composes freely — an entity can embed audit fields *and* extend whatever it genuinely needs to — and groups the audit columns as one value object instead of loose inherited fields.
+  - **Over `@CreationTimestamp`/`@UpdateTimestamp` or Spring Data's `AuditingEntityListener`**: the embeddable + listener pattern is portable, plain JPA (`@Embeddable`, `@EntityListeners`, `@PrePersist`/`@PreUpdate`) — no Hibernate-only or Spring-only annotations in the domain model, and the listener is explicit code you can read and extend (e.g. to also capture the acting user).
+
+```java
+public interface Auditable {
+    Audit getAudit();
+    void setAudit(Audit audit);
+}
+
+@Embeddable
+@Getter @Setter
+public class Audit {
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
+    @Column(name = "updated_at")
+    private Instant updatedAt;
+}
+
+public class AuditListener {
+    @PrePersist
+    public void onPersist(Auditable auditable) {
+        var audit = new Audit();
+        audit.setCreatedAt(Instant.now());
+        auditable.setAudit(audit);
+    }
+
+    @PreUpdate
+    public void onUpdate(Auditable auditable) {
+        auditable.getAudit().setUpdatedAt(Instant.now());
+    }
+}
+```
+
+  Entities implement `Auditable`, add `@Embedded private Audit audit;`, and declare `@EntityListeners(AuditListener.class)`.
+
+- Audit fields are `Instant`, mapped to `timestamptz` in the Flyway migration (see `postgresql-aws.md`); `created_at` is `updatable = false`.
+- If the project already uses Spring Data auditing — or needs `@CreatedBy`/`@LastModifiedBy` from `AuditorAware` — `AuditingEntityListener` with `@CreatedDate`/`@LastModifiedDate` on the embeddable is an acceptable substitute for the hand-written listener. Same rule applies: embed, don't extend.
+- **Bulk JPQL/SQL updates bypass entity listeners** — a `@Modifying @Query("update ...")` must set `updated_at` explicitly in the statement.
+- Timestamp columns are not an audit trail. When the requirement is history ("who changed what, when"), use Hibernate Envers or CDC (Debezium) — not more columns.
+
 ## Batching & Hibernate settings
 
 Every project's `application.yml` includes:
@@ -156,3 +201,4 @@ spring:
 - The best UUID type for a primary key (TSID): https://vladmihalcea.com/uuid-database-primary-key/
 - Keyset pagination: https://vladmihalcea.com/keyset-pagination-jpa-hibernate/ and https://vladmihalcea.com/spring-data-windowiterator/
 - The best way to map a @OneToOne: https://vladmihalcea.com/best-way-onetoone-optional/
+- Auditing with @EntityListeners and @Embeddable: https://vladmihalcea.com/how-to-audit-entity-modifications-using-the-jpa-entitylisteners-embedded-and-embeddable-annotations/
