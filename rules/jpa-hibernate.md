@@ -106,6 +106,15 @@ Pick the mapping deliberately — never leave `@Enumerated` unspecified (the def
 - Default choice: `@Enumerated(EnumType.STRING)` — self-documenting in queries and safe to reorder enum constants. Pair with a `CHECK` constraint (or PostgreSQL enum type) in the Flyway migration so the database rejects invalid values.
 - `EnumType.ORDINAL` (with a `smallint` column) only for high-volume tables where the storage difference is measurable — and then constants may **never** be reordered or removed, only appended. Document this on the enum itself.
 
+## Inheritance mapping
+
+Most domain models don't need entity inheritance at all — prefer composition, and check whether the "subtypes" are really just a `type` column plus different behavior in the service layer. When a hierarchy is genuine, `@Inheritance` is a deliberate choice, never a default:
+
+- **`SINGLE_TABLE` is the default choice** — one table, no joins, the best SQL of the three. Its cost is data integrity: subclass columns must be nullable, so the database can't enforce them. Compensate in the Flyway migration with a `CHECK` constraint per subtype (`check (type <> 'CARD' or card_number is not null)`), and give the discriminator an explicit `@DiscriminatorColumn`.
+- **`JOINED`** when those `NOT NULL` constraints are genuinely required, and only if the hierarchy is queried by concrete type. Polymorphic queries and `@OneToMany` collections of the base type make it fan out into joins across every subclass table.
+- **Never `TABLE_PER_CLASS`** — polymorphic queries become a `UNION ALL` over every table in the hierarchy, and identity must stay unique across all of them.
+- A polymorphic `@ManyToOne` to a base type is where inheritance actually earns its cost. Loading a collection of base-type entities only to `instanceof`-dispatch in Java is a sign the hierarchy is in the wrong place.
+
 ## Concurrency & locking
 
 - **Every entity that users can concurrently edit gets a `@Version` field.** Without it, the last write silently wins and the first user's update is lost — optimistic locking is a correctness requirement, not an optimization. This matters even more with read replicas and long user think-time between read and save.
@@ -179,6 +188,13 @@ spring:
 - `in_clause_parameter_padding` improves execution-plan cache hit rates for `IN` queries.
 - On Oracle (if ever used), raise `hibernate.jdbc.fetch_size` — the driver default is only 10.
 
+## Persistence context size
+
+- **Keep the persistence context small.** Every managed entity is dirty-checked on every flush and held until the transaction ends, so a context bloated with thousands of entities costs both memory and CPU on flushes that change nothing (Mihalcea).
+- Practically: paginate (see *Fetching*), use DTO projections for read-only paths so entities never enter the context at all, and scope transactions to one unit of work rather than one long request.
+- Loops that must process many entities `flush()` then `clear()` every batch — see *Bulk & write operations*.
+- A `@Transactional(readOnly = true)` read path skips dirty checking and the entity snapshots entirely — one more reason every read path is marked read-only (see `spring-boot.md`).
+
 ## Bulk & write operations
 
 - Mass updates/deletes use bulk JPQL (`@Modifying(clearAutomatically = true) @Query("update ...")`) or SQL — never load-modify-save loops over entities.
@@ -202,3 +218,5 @@ spring:
 - Keyset pagination: https://vladmihalcea.com/keyset-pagination-jpa-hibernate/ and https://vladmihalcea.com/spring-data-windowiterator/
 - The best way to map a @OneToOne: https://vladmihalcea.com/best-way-onetoone-optional/
 - Auditing with @EntityListeners and @Embeddable: https://vladmihalcea.com/how-to-audit-entity-modifications-using-the-jpa-entitylisteners-embedded-and-embeddable-annotations/
+- 14 high-performance Java persistence tips: https://vladmihalcea.com/14-high-performance-java-persistence-tips/
+- Entity inheritance with JPA and Hibernate: https://vladmihalcea.com/the-best-way-to-use-entity-inheritance-with-jpa-and-hibernate/

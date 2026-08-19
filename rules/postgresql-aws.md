@@ -16,6 +16,7 @@ private Map<String, Object> attributes;
   Use `jsonb` (indexed, binary), never plain `json`. Add a GIN index in the Flyway migration if the column is queried.
 - **Timestamps are `timestamptz`** in DDL, mapped to `Instant` (or `OffsetDateTime`) in entities. Never `timestamp without time zone`.
 - Prefer `text` over `varchar(n)` unless a length limit is a genuine business rule — they perform identically in PostgreSQL.
+- **Pick the narrowest type that fits the data, and prefer the native type over a generic one.** Compact rows mean more of the working set and more index entries fit in the buffer pool — the cheapest performance win there is (Mihalcea). Use `int` over `bigint` for counts and codes that will never exceed 2 billion, `smallint` for enum ordinals (see `jpa-hibernate.md`), `inet`/`cidr` for IP addresses, `uuid` for UUIDs (never `text`), `numeric(p,s)` with an explicit scale for money. Primary keys stay `bigint` regardless — see `jpa-hibernate.md`.
 - IDs come from explicit sequences, never `SERIAL`/`BIGSERIAL` (see `jpa-hibernate.md`).
 - For coordination beyond row locks (e.g. singleton jobs across instances), use **advisory locks** (`pg_advisory_xact_lock`) — or ShedLock, which uses them — instead of home-grown lock tables.
 - Rely on MVCC: readers don't block writers and vice versa. Don't add `LockModeType.PESSIMISTIC_READ` "just in case" — lock only when the use case proves it.
@@ -41,6 +42,9 @@ spring:
 ```
 
   Size the pool from `(cores × 2) + effective_spindle_count` per instance, not from expected user count. More connections is almost never the fix.
+- **Leave server-side prepared statements on.** After `prepareThreshold` executions (default 5) the driver promotes a statement to a named server-side prepared statement, so PostgreSQL reuses the parse and plan instead of re-parsing every call — Mihalcea's statement-caching tip. The driver's own cache (`preparedStatementCacheQueries=256`, `preparedStatementCacheSizeMiB=5`) is sized sensibly by default; raise it only for an application with many distinct statements, and never set `prepareThreshold=0` to "fix" an error without understanding the cause.
+  - **Transaction-level connection pooling breaks this.** Behind **RDS Proxy**, prepared statements pin the session to a backend connection and defeat multiplexing; behind **PgBouncer in transaction mode** (pre-1.21) they fail outright. If either sits in front of the database, either set `prepareThreshold=0` deliberately and record why, or use a proxy version that supports protocol-level prepared statements. Pick one — don't discover it in production.
+  - Hibernate's `query.in_clause_parameter_padding` (see `jpa-hibernate.md`) exists to make this cache actually hit for `IN` queries.
 - Set a `statement_timeout` (via `spring.datasource.hikari.data-source-properties.options` or the RDS parameter group) so a runaway query can't hold connections forever.
 
 ## AWS RDS
