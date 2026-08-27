@@ -69,8 +69,26 @@ Machines own style and mechanical quality; the rule files stay reserved for what
 - `lombok.config`'s `addLombokGeneratedAnnotation` (see `lombok.md`) already keeps Lombok-generated code out of the numbers. Beyond that, exclude only genuinely generated sources — never exclude code to hit a number.
 - Coverage is a signal, not a goal: an uncovered branch is a question to answer, and an assertion-free test written to satisfy the gate is a violation of these rules, not compliance with them.
 
+## Persistence static analysis — Hypersistence Optimizer (optional)
+
+Spotless and Sonar don't know anything about JPA mappings: an EAGER `@ManyToOne`, an `IDENTITY` id, or a missing `removeItem` passes every check in this file. **Hypersistence Optimizer** (Vlad Mihalcea, commercial) closes that gap — it inspects the `EntityManagerFactory` at startup and reports exactly the rules in `jpa-hibernate.md` as CRITICAL/MAJOR events.
+
+- **Optional, evaluate per project** — it is paid, so it is a recommendation, not a non-negotiable. Worth it on a project large enough that mapping review by eye has stopped being reliable.
+- If adopted, it is one bean, and it belongs in a **test** so the failure lands at development time rather than in a production log:
+
+```java
+@Bean
+public HypersistenceOptimizer hypersistenceOptimizer(EntityManagerFactory entityManagerFactory) {
+    return new HypersistenceOptimizer(new JpaConfig(entityManagerFactory));
+}
+```
+
+- Treat it the way the modularity test in `architecture.md` is treated: assert on zero CRITICAL events so the build fails, rather than logging events nobody reads. Any event deliberately accepted gets a recorded reason, same as a deactivated Sonar rule.
+- Nothing here is a substitute for the rules themselves — the tool checks mappings, not whether a read path uses a DTO projection or is paginated.
+
 ## References
 
 - SonarSource — Cognitive Complexity white paper: https://www.sonarsource.com/resources/cognitive-complexity/
 - Palantir Java Format: https://github.com/palantir/palantir-java-format
 - Spotless: https://github.com/diffplug/spotless
+- Vlad Mihalcea — Tuning Spring Petclinic with Hypersistence Optimizer: https://vladmihalcea.com/spring-petclinic-hypersistence-optimizer/

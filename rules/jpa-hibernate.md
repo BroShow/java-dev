@@ -14,7 +14,7 @@ private Customer customer;
 
   EAGER is a per-mapping decision you can never undo per-query; LAZY can always be upgraded per-query.
 - **Kill N+1 at the query level**, not with EAGER: use `JOIN FETCH` in JPQL or `@EntityGraph` on the repository method when the use case needs the association.
-- Never `JOIN FETCH` **two collections** in one query (Cartesian product) and never combine a collection `JOIN FETCH` with pagination (Hibernate paginates in memory — `HHH90003004` warning).
+- Never `JOIN FETCH` **two collections** in one query (Cartesian product) and never combine a collection `JOIN FETCH` with pagination (Hibernate paginates in memory — `HHH90003004` warning; `fail_on_pagination_over_collection_fetch` in *Batching & Hibernate settings* promotes that warning to an exception).
 - **DTO projections for every read-only use case.** If the data is only displayed and never modified, select a record directly:
 
 ```java
@@ -69,12 +69,17 @@ If the entity has a truly immutable, unique **natural key** (ISBN, account numbe
 
 ## Association mapping
 
-- The `@ManyToOne` child side is the best mapping. Map a bidirectional `@OneToMany` (with `mappedBy`) only when the parent genuinely needs the collection, and always with helper methods that keep both sides in sync:
+- The `@ManyToOne` child side is the best mapping. Map a bidirectional `@OneToMany` (with `mappedBy`) only when the parent genuinely needs the collection, and always with helper methods that keep both sides in sync. **Both halves of the pair are required** — an `addItem` without a matching `removeItem` is the common half-done case, and it leaves the removed child still pointing at its parent, so `orphanRemoval` never fires and the change isn't propagated:
 
 ```java
 public void addItem(OrderItem item) {
     items.add(item);
     item.setOrder(this);
+}
+
+public void removeItem(OrderItem item) {
+    items.remove(item);
+    item.setOrder(null);
 }
 ```
 
@@ -181,11 +186,15 @@ spring:
         order_inserts: true
         order_updates: true
         query.in_clause_parameter_padding: true
+        query.fail_on_pagination_over_collection_fetch: true
+        connection.provider_disables_autocommit: true
 ```
 
 - `batch_size` + `order_inserts`/`order_updates` turn N inserts into N/30 round-trips.
 - Always add `reWriteBatchedInserts=true` to the PostgreSQL JDBC URL — the driver rewrites batches into multi-row INSERTs (see `postgresql-aws.md`).
 - `in_clause_parameter_padding` improves execution-plan cache hit rates for `IN` queries.
+- `fail_on_pagination_over_collection_fetch` turns the in-memory-pagination warning (`HHH90003004`, see *Fetching*) into a hard failure. A warning in a log nobody reads is not a guardrail; this makes the rule enforce itself at development time.
+- `connection.provider_disables_autocommit` lets Hibernate skip the auto-commit check it otherwise performs when starting a RESOURCE_LOCAL transaction, so the connection is acquired lazily — at the first statement rather than at transaction start. **It requires `spring.datasource.hikari.auto-commit: false`** (see `postgresql-aws.md`); setting it without disabling auto-commit on the pool is a correctness bug, not an optimization.
 - On Oracle (if ever used), raise `hibernate.jdbc.fetch_size` — the driver default is only 10.
 
 ## Persistence context size
@@ -220,3 +229,4 @@ spring:
 - Auditing with @EntityListeners and @Embeddable: https://vladmihalcea.com/how-to-audit-entity-modifications-using-the-jpa-entitylisteners-embedded-and-embeddable-annotations/
 - 14 high-performance Java persistence tips: https://vladmihalcea.com/14-high-performance-java-persistence-tips/
 - Entity inheritance with JPA and Hibernate: https://vladmihalcea.com/the-best-way-to-use-entity-inheritance-with-jpa-and-hibernate/
+- Tuning Spring Petclinic with Hypersistence Optimizer (the settings above, applied to a real app): https://vladmihalcea.com/spring-petclinic-hypersistence-optimizer/

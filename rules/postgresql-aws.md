@@ -39,9 +39,11 @@ spring:
       minimum-idle: 10
       max-lifetime: 900000        # 15 min — below any NAT/LB idle timeout
       connection-timeout: 5000
+      auto-commit: false
 ```
 
   Size the pool from `(cores × 2) + effective_spindle_count` per instance, not from expected user count. More connections is almost never the fix.
+- **`auto-commit: false` on the pool is what makes `hibernate.connection.provider_disables_autocommit` safe** (see `jpa-hibernate.md`). The pool hands out connections with auto-commit already off, so Hibernate can trust that and defer acquiring a connection until the first statement instead of at transaction start — shorter connection lease times, which show up directly in the Hikari metrics in `observability.md`. Set the two together or neither.
 - **Leave server-side prepared statements on.** After `prepareThreshold` executions (default 5) the driver promotes a statement to a named server-side prepared statement, so PostgreSQL reuses the parse and plan instead of re-parsing every call — Mihalcea's statement-caching tip. The driver's own cache (`preparedStatementCacheQueries=256`, `preparedStatementCacheSizeMiB=5`) is sized sensibly by default; raise it only for an application with many distinct statements, and never set `prepareThreshold=0` to "fix" an error without understanding the cause.
   - **Transaction-level connection pooling breaks this.** Behind **RDS Proxy**, prepared statements pin the session to a backend connection and defeat multiplexing; behind **PgBouncer in transaction mode** (pre-1.21) they fail outright. If either sits in front of the database, either set `prepareThreshold=0` deliberately and record why, or use a proxy version that supports protocol-level prepared statements. Pick one — don't discover it in production.
   - Hibernate's `query.in_clause_parameter_padding` (see `jpa-hibernate.md`) exists to make this cache actually hit for `IN` queries.
@@ -90,3 +92,4 @@ volumes:
 ## References
 
 - Vlad Mihalcea — 9 PostgreSQL high-performance tips: https://vladmihalcea.com/9-postgresql-high-performance-performance-tips/
+- Tuning Spring Petclinic with Hypersistence Optimizer: https://vladmihalcea.com/spring-petclinic-hypersistence-optimizer/
