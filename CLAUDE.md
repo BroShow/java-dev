@@ -2,7 +2,7 @@
 
 These rules apply to ALL Java coding tasks in this workspace. Every Java project here uses **Java 21+, Spring Boot 3.x, and Lombok**, with **PostgreSQL on AWS RDS** as the default database. The persistence rules follow Vlad Mihalcea's High-Performance Java Persistence guidance, the core Java rules follow Joshua Bloch's Effective Java, and the architecture rules follow Oliver Drotbohm's modular-monolith approach (Spring Modulith) — simple by default, efficient by design.
 
-Read and follow all nine rule files before writing Java code:
+Read and follow all ten rule files before writing Java code:
 
 @rules/java-core.md
 @rules/spring-boot.md
@@ -10,6 +10,7 @@ Read and follow all nine rule files before writing Java code:
 @rules/lombok.md
 @rules/jpa-hibernate.md
 @rules/postgresql-aws.md
+@rules/multitenancy.md
 @rules/flyway.md
 @rules/observability.md
 @rules/static-analysis.md
