@@ -57,6 +57,22 @@ Give every clone of the project identical rules, either by:
 
   Consumers update with `git submodule update --remote`.
 
+### Using with Kiro
+
+Kiro doesn't read `CLAUDE.md` and has no equivalent of the `@rules/...` import syntax — but its [steering files](https://kiro.dev/docs/steering/) (`.kiro/steering/*.md`) default to `inclusion: always` when they have no front matter, which matches how Claude Code loads these rules. The rule files work verbatim; only the entry point needs recreating:
+
+```bash
+mkdir -p .kiro/steering
+cp ~/Projects/java-dev/rules/*.md .kiro/steering/
+# Entry point: CLAUDE.md minus the @rules/ import lines (the files are loaded directly now)
+grep -v '^@rules/' ~/Projects/java-dev/CLAUDE.md > .kiro/steering/00-java-non-negotiables.md
+```
+
+Re-copy when the rules change, as with the copy variant of Option 3. Two notes:
+
+- Kiro supports scoping a steering file via front matter (`inclusion: fileMatch`), e.g. `flyway.md` to `**/db/migration/**`. Prefer the `always` default anyway: these are generation rules, and a match on existing files won't fire when the agent is creating the first migration.
+- Kiro also loads [`AGENTS.md`](https://agents.md) files, but they don't follow `@` imports either — so they offer no advantage over steering files for this repo.
+
 ## Sample prompts
 
 **Scaffold a feature** (new or existing project):
