@@ -63,6 +63,32 @@ Give every clone of the project identical rules, either by:
 
 > Add a `POST /orders/{id}/refunds` endpoint following the workspace rules end to end: Flyway migration, entity changes, DTOs, service with proper transaction boundaries, controller, and tests.
 
+**Building blocks** — one layer at a time, when you'd rather review each piece than take a whole feature in one diff:
+
+*Add an entity (+ migration):*
+
+> Add a `Refund` entity to the `order` module as part of the Order aggregate, per `rules/jpa-hibernate.md`, with its Flyway migration per `rules/flyway.md`.
+
+*Add a repository:*
+
+> Add a repository for the `Refund` aggregate root per `rules/jpa-hibernate.md`, including a paginated DTO projection for the refund list screen. Show me the SQL Hibernate generates for the projection query.
+
+*Add a service:*
+
+> Add a `RefundService` to the `order` module per `rules/spring-boot.md`, covering create, approve, and lookup-by-order.
+
+*Add a controller:*
+
+> Add a `RefundController` exposing `RefundService` per `rules/spring-boot.md`, with a `@WebMvcTest` covering validation failures and the happy path.
+
+*Add a module:*
+
+> Add a new `payment` module per `rules/architecture.md`. It will need order data — wire that dependency the way the rules require, and make sure the `ApplicationModules.verify()` test still passes.
+
+*Add tests for existing code:*
+
+> Add persistence tests for the `order` module per the testing rules in `rules/spring-boot.md` and `rules/postgresql-aws.md`, with statement-count assertions on the query paths most likely to regress into N+1.
+
 **Audit an existing codebase** — run this before letting agents make changes, so fixes are prioritized and deliberate:
 
 > Audit this codebase against `rules/jpa-hibernate.md` and `rules/lombok.md`. Report every violation — EAGER associations, `@Data`/`@EqualsAndHashCode` on entities, IDENTITY id generation, missing pagination, open-in-view enabled, missing `@Version`, load-modify-save loops — as a prioritized list with file references. Do not change any code yet.
